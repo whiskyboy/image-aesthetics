@@ -2,3 +2,4 @@ data
 .csv
 .ipynb_checkpoints
 *DS_Store
+*tar.gz
