@@ -1,5 +1,7 @@
 data
-.csv
+model
 .ipynb_checkpoints
 *DS_Store
 *tar.gz
+*.jpg
+*.html
