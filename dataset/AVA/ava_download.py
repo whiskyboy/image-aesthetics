@@ -23,6 +23,9 @@ logging.basicConfig(level=logging.INFO,
 server = Manager()
 shared_failed_proxy = server.dict()
 
+HTML_CACHE_PATH = "./html_cache/"
+IMG_CACHE_PATH = "./img_cache/"
+
 def get_proxy():
     while len(get_all_proxy()) < 64:
         logging.info("avaliable proxy less than 64")
@@ -47,8 +50,8 @@ class WebParser(object):
     def __init__(self, wait_second=1, max_retry_time=10, timeout=5):
         self.url_pattern = "http://www.dpchallenge.com/image.php?IMAGE_ID=%s"
         
-        self.html_cache_path = "./data/html_cache/"
-        self.img_cache_path = "./data/img_cache/"
+        self.html_cache_path = HTML_CACHE_PATH
+        self.img_cache_path = IMG_CACHE_PATH
         if not os.path.exists(self.html_cache_path):
             os.makedirs(self.html_cache_path)
         if not os.path.exists(self.img_cache_path):
@@ -75,7 +78,8 @@ class WebParser(object):
                 html = requests.get(url=url, 
                                     headers=headers, 
                                     proxies={"http": "http://{}".format(proxy)},
-                                    timeout=self.timeout)\
+                                    timeout=self.timeout,
+                                    verify=False)\
                                .content
                 if len(html) < valid_size:
                     html = None
@@ -97,18 +101,15 @@ class WebParser(object):
     def load_html(self, imgid):
         self.imgid = imgid
         cache_file = self.html_cache_path + "%s.html"%self.imgid
-        if os.path.exists(cache_file):
-            logging.info("[imgid=%s]html has been cached."%self.imgid)
-            html = open(cache_file, 'r').read()
-        else:
-            url = self.url_pattern%self.imgid
-            html = self.__get_html_response(url, valid_size=self.MIN_HTML_SIZE)
-            if html is None:
-                logging.warning("[imgid=%s]download html failed."%self.imgid)
-                return False
-            
-            self.save_html(html, cache_file)
-            logging.info("[imgid=%s]download html successfully."%self.imgid)
+        
+        url = self.url_pattern%self.imgid
+        html = self.__get_html_response(url, valid_size=self.MIN_HTML_SIZE)
+        if html is None:
+            logging.warning("[imgid=%s]download html failed."%self.imgid)
+            return False
+        
+        self.save_html(html, cache_file)
+        logging.info("[imgid=%s]download html successfully."%self.imgid)
             
         try:
             self.soup = BeautifulSoup(html, 'html.parser')
@@ -125,21 +126,20 @@ class WebParser(object):
     def save_image(self):
         imgid = self.imgid
         cached_img = self.img_cache_path + "%s.jpg"%imgid
-        if os.path.exists(cached_img):
-            logging.info("[imgid=%s]image has been cached."%imgid)
-        else:
-            img_url = self.get_img_url()
-            if img_url is None:
-                logging.warning("[imgid=%s]image does not exist."%imgid)
-                return False
             
-            img = self.__get_html_response(img_url, valid_size=self.MIN_HTML_SIZE)
-            if img is None:
-                logging.warning("[imgid=%s]image caches failed."%imgid)
-                return False
-            
-            self.save_html(img, cached_img, mod='wb')
-            logging.info("[imgid=%s]image caches successfully."%imgid)
+        img_url = self.get_img_url()
+        if img_url is None:
+            logging.warning("[imgid=%s]image does not exist."%imgid)
+            return False
+        
+        img = self.__get_html_response(img_url, valid_size=self.MIN_HTML_SIZE)
+        if img is None:
+            logging.warning("[imgid=%s]image caches failed."%imgid)
+            return False
+        
+        self.save_html(img, cached_img, mod='wb')
+        logging.info("[imgid=%s]image caches successfully."%imgid)
+        
         return True
 
     def get_img_url(self):
@@ -150,13 +150,16 @@ class WebParser(object):
             return img_container.find_all("img")[1].get("src", None)
 
 def Spider(imgid):
-    web_parser = WebParser(wait_second=0, max_retry_time=10, timeout=10)
+    if os.path.exists(IMG_CACHE_PATH+"%s.jpg"%imgid):
+        logging.info("[imgid=%s]image has been cached."%imgid)
+        return 
+    web_parser = WebParser(wait_second=0, max_retry_time=5, timeout=60)
     if web_parser.load_html(imgid):
         web_parser.save_image()
                 
 if __name__ == "__main__":
     imgid_list = []
-    with open("./data/ava/AVA.txt", 'r') as fin:
+    with open("./AVA.txt", 'r') as fin:
         for line in fin:
             fields = line.strip().split(" ")
             if len(fields) < 2:
@@ -164,7 +167,7 @@ if __name__ == "__main__":
             imgid = fields[1]
             imgid_list.append(imgid)
     
-    p = Pool(processes=16)
+    p = Pool(processes=64)
     p.map(Spider, imgid_list)
     p.close()
     p.join()

@@ -5,3 +5,5 @@ model
 *tar.gz
 *.jpg
 *.html
+*.log
+nohup.out
